@@ -71,6 +71,7 @@ func TestDownloadPackage(t *testing.T){
     }{
         { id: "Newtonsoft.Json", version: "8.0.1" },
         { id: "Glass.Mapper.Sc" , version: "4.2.1.188" },
+        { id: "bootstrap" , version: "4.0.0" },
     }
 
     for _, p := range pkgs {
