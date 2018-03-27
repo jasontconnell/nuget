@@ -96,3 +96,28 @@ func TestDownloadPackage(t *testing.T){
         })
     }
 }
+
+func TestDownloadAndExtractPackage(t *testing.T){
+
+    pkgs := []struct {
+        id string
+        version string
+    }{
+        { id: "Newtonsoft.Json", version: "8.0.1" },
+        { id: "Glass.Mapper.Sc" , version: "4.2.1.188" },
+        { id: "bootstrap" , version: "4.0.0" },
+    }
+
+    for _, p := range pkgs {
+        t.Run("Package " + p.id + "-" + p.version, func (t *testing.T){
+            fn, err := DownloadAndExtract(serviceUrl, p.id, p.version, `c:\test\test`, `c:\test\extract`)
+            if err != nil {
+                t.Log(err)
+                t.Fail()
+                return
+            }
+
+            t.Log(fn)
+        })
+    }
+}

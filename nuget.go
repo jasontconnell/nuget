@@ -8,6 +8,8 @@ import (
     "path"
     "path/filepath"
     "os"
+    "archive/zip"
+    "strings"
 )
 
 func decodeJson(r io.Reader, obj interface{}){
@@ -55,6 +57,63 @@ func Download(svcUrl, id, version, folder string) (string, error) {
     }
 
     return fn, nil
+}
+
+func DownloadAndExtract(svcUrl, id, version, downloadFolder, extractFolder string) (string, error) {
+    fn, err := Download(svcUrl, id, version, downloadFolder)
+
+    if err != nil {
+        return "", err
+    }
+
+    zr,zrerr := zip.OpenReader(filepath.Join(downloadFolder, fn))
+
+    if zrerr != nil {
+        return "", zrerr
+    }
+
+    defer zr.Close()
+
+    dir := filepath.Join(extractFolder, id, version)
+    merr := os.MkdirAll(dir, os.ModePerm)
+
+    if merr != nil {
+        return "", merr
+    }
+
+    for _, f := range zr.File {
+        fpath,n := path.Split(f.Name)
+        extPath := filepath.Join(append([]string{dir}, strings.Split(fpath, "/")...)...)
+        meerr := os.MkdirAll(extPath, os.ModePerm)
+        if meerr != nil {
+            fmt.Println("couldn't create folder", extPath)
+            continue
+        }
+        fout,ferr := os.Create(filepath.Join(extPath, n))
+        docopy := true
+
+        if ferr != nil {
+            fmt.Println(ferr)
+            docopy = false
+        }
+
+        rc, rcerr := f.Open()
+        if rcerr != nil {
+            fmt.Println(rcerr)
+            docopy = false
+        }
+
+        if docopy {
+            _, cerr := io.Copy(fout, rc)
+            if cerr != nil {
+                fmt.Println(cerr)
+            }
+        }
+
+        rc.Close()
+    }
+
+    return dir, nil
 }
 
 func (svc *NugetService) GetResources() error {
@@ -162,6 +221,10 @@ func (svc *NugetService) DownloadVersion(version Version, folder string) (string
     _, fn := path.Split(vd.PackageUrl)
     f,err := os.Create(filepath.Join(folder, fn))
 
+    if err != nil {
+        return "", err
+    }
+
     resp, gerr := http.Get(vd.PackageUrl)
     if gerr != nil {
         return "", gerr
@@ -170,10 +233,7 @@ func (svc *NugetService) DownloadVersion(version Version, folder string) (string
     defer resp.Body.Close()
     defer f.Close()
 
-    if err != nil {
-        return "", err
-    }
-
+    
     _, cerr := io.Copy(f, resp.Body)
 
     return fn, cerr
