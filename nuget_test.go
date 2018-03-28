@@ -121,3 +121,32 @@ func TestDownloadAndExtractPackage(t *testing.T){
         })
     }
 }
+
+func TestGetLatestVersion(t *testing.T){
+    pkgs := []struct {
+        id string
+        version string
+        result bool // should equal or should not equal
+    }{
+        { id: "Newtonsoft.Json", version: "8.0.1", result: false },
+        { id: "Glass.Mapper.Sc" , version: "4.2.1.188", result: false },
+        { id: "bootstrap" , version: "4.0.0", result: true },
+    }
+
+        for _, p := range pkgs {
+        t.Run("Package " + p.id + "-" + p.version, func (t *testing.T){
+            vstr,err := GetLatestVersion(serviceUrl, p.id)
+            if err != nil {
+                t.Logf("Got error, expecting version, %v", err)
+                t.Fail()
+            }
+
+            if vstr != p.version && p.result {
+                t.Logf("Versions not equal. %v and got latest from service: %v", p.version, vstr)
+                t.Fail()
+            } else {
+                t.Logf("Got latest version from service for %v, latest is %v. The result is expected.", p.id, vstr)
+            }
+        })
+    }
+}

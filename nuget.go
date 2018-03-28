@@ -117,7 +117,7 @@ func DownloadAndExtract(svcUrl, id, version, downloadFolder, extractFolder strin
     return dir, nil
 }
 
-func GetLatestVersion(svcUrl, id string) string {
+func GetLatestVersion(svcUrl, id string) (string, error) {
     var err error
     svc := NewService(svcUrl)
     err = svc.GetResources()
@@ -129,7 +129,7 @@ func GetLatestVersion(svcUrl, id string) string {
     pkgdata,err := svc.GetPackageData(id)
     version := getHighestVersion(pkgdata.Versions)
 
-    return version
+    return version, nil
 }
 
 func getHighestVersion(versions []Version) string {
@@ -139,8 +139,8 @@ func getHighestVersion(versions []Version) string {
         pts := strings.Split(v.Version, ".")
         m := 1
         cv := 0
-        for i := len(pts) - 1; i >= 0; i++ {
-            parsed, _ := strconv.Atoi(pts)
+        for i := len(pts) - 1; i >= 0; i-- {
+            parsed, _ := strconv.Atoi(pts[i])
             cv = cv + (parsed * m)
             m = m * 100
         }
