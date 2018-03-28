@@ -10,6 +10,7 @@ import (
     "os"
     "archive/zip"
     "strings"
+    "strconv"
 )
 
 func decodeJson(r io.Reader, obj interface{}){
@@ -116,6 +117,42 @@ func DownloadAndExtract(svcUrl, id, version, downloadFolder, extractFolder strin
     return dir, nil
 }
 
+func GetLatestVersion(svcUrl, id string) string {
+    var err error
+    svc := NewService(svcUrl)
+    err = svc.GetResources()
+
+    if err != nil {
+        return "", fmt.Errorf("Couldn't get resources, %v", err)
+    }
+
+    pkgdata,err := svc.GetPackageData(id)
+    version := getHighestVersion(pkgdata.Versions)
+
+    return version
+}
+
+func getHighestVersion(versions []Version) string {
+    vs := ""
+    high := 0
+    for _, v := range versions {
+        pts := strings.Split(v.Version, ".")
+        m := 1
+        cv := 0
+        for i := len(pts) - 1; i >= 0; i++ {
+            parsed, _ := strconv.Atoi(pts)
+            cv = cv + (parsed * m)
+            m = m * 100
+        }
+
+        if cv > high {
+            high = cv
+            vs = v.Version
+        }
+    }
+    return vs
+}
+
 func (svc *NugetService) GetResources() error {
     if len(svc.resources.Resources) > 0 {
         return nil
@@ -168,7 +205,7 @@ func (svc *NugetService) GetPackageData(id string) (ResultData, error) {
         return pkg, err
     }
 
-    url := fmt.Sprintf(`%s?q=@Id:"%s"`, q.Id, id)
+    url := fmt.Sprintf(`%s?q=@Id:"%s"&prerelease=false`, q.Id, id)
     resp, rerr := http.Get(url)
     if rerr != nil {
         return pkg, fmt.Errorf("Failed in call to query, %v", rerr)
