@@ -134,15 +134,19 @@ func GetLatestVersion(svcUrl, id string) (string, error) {
 
 func getHighestVersion(versions []Version) string {
     vs := ""
-    high := 0
+    high := int64(0)
     for _, v := range versions {
         pts := strings.Split(v.Version, ".")
-        m := 1
-        cv := 0
+        m := int64(1)
+        cv := int64(0)
         for i := len(pts) - 1; i >= 0; i-- {
-            parsed, _ := strconv.Atoi(pts[i])
+            pt := pts[i]
+            if len(pt) > 2 {
+                pt = string(pt[:2])
+            }
+            parsed, _ := strconv.ParseInt(pt, 10, 64)
             cv = cv + (parsed * m)
-            m = m * 100
+            m = m * int64(100)
         }
 
         if cv > high {
