@@ -1,1 +1,1 @@
-module nuget
+module github.com/jasontconnell/nuget
