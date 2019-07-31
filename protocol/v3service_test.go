@@ -9,15 +9,23 @@ func TestV3Service(t *testing.T) {
 
 	svc := NewV3Client(url)
 
-	if !svc.IsValid() {
-		t.Fatal("not a valid v3 service")
-	}
-
 	pkg, err := svc.GetPackageData("Newtonsoft.Json")
 
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 
-	t.Log(pkg.Id, pkg.Versions)
+	if len(pkg.Versions) == 0 {
+		t.Error("NO versions")
+		t.Fail()
+	}
+
+	v := pkg.VersionMap["12.0.1"]
+	nuspec, err := svc.GetNuspec(pkg, v)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log(nuspec)
 }
