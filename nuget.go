@@ -1,23 +1,39 @@
 package nuget
 
 import (
-	"fmt"
-
 	"github.com/jasontconnell/nuget/protocol"
+	"github.com/pkg/errors"
+	"io/ioutil"
+	"os"
+	"path"
 )
 
 type Service struct {
-	client protocol.Client
+	client client
+}
+
+func getClient(url string) client {
+	v2client := protocol.NewV2Client(url)
+	if v2client.IsValid() {
+		return v2client
+	}
+
+	v3client := protocol.NewV3Client(url)
+	if v3client.IsValid() {
+		return v3client
+	}
+
+	return nil
 }
 
 func NewService(url string) Service {
-	client := protocol.GetClient(url)
+	client := getClient(url)
 	return Service{client: client}
 }
 
-func FindPackage(urls []string, packageId string) (Package, error) {
+func FindPackage(urls []string, packageId string) (protocol.Package, error) {
 	var err error
-	var pkg Package
+	var pkg protocol.Package
 	for _, url := range urls {
 		ns := NewService(url)
 		if ns.client.IsValid() {
@@ -33,34 +49,40 @@ func FindPackage(urls []string, packageId string) (Package, error) {
 }
 
 func (svc Service) Download(id, version, folder string) (string, error) {
-
-	vexists := svc.client.VersionExists(id, version)
-
-	if !vexists {
-		return "", fmt.Errorf("package version doesn't exist %s - %s", id, version)
-	}
-
-	pkgdata, err := svc.client.GetPackageData(id)
+	v, err := svc.client.GetVersion(id, version)
 
 	if err != nil {
-		return "", fmt.Errorf("Couldn't get package data, %v", err)
+		return "", errors.Wrapf(err, "getting version %s %s", id, version)
 	}
 
+	if v.Version == "" {
+		return "", errors.Wrapf(err, "version not found %s %s", id, version)
+	}
 
+	r, err := svc.client.DownloadPackage(v)
 
-	// v := svc.GetVersion(pkgdata, version)
+	if err != nil {
+		return "", errors.Wrapf(err, "Error downloading version, %s %s.", id, version)
+	}
 
-	// if v.Version == "" {
-	// 	return "", fmt.Errorf("Version not found, %v", version)
-	// }
+	fn := path.Join(folder, id+version+".nupkg")
 
-	// fn, err := svc.DownloadVersion(v, folder)
+	f, err := os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return "", errors.Wrapf(err, "opening destination file failed, %s", fn)
+	}
 
-	// if err != nil {
-	// 	return "", fmt.Errorf("Error downloading version, %v.", err)
-	// }
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return "", errors.Wrapf(err, "reading downloaded file failed, %s %s %s", fn, id, version)
+	}
 
-	// return fn, nil
+	_, err = f.Write(b)
+	if err != nil {
+		return "", errors.Wrapf(err, "writing destination file, %s %s %s", fn, id, version)
+	}
+
+	return fn, nil
 }
 
 // func DownloadAndExtract(svcUrl, id, version, downloadFolder, extractFolder string) (string, error) {

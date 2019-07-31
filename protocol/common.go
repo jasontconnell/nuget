@@ -1,15 +1,26 @@
 package protocol
 
 import (
-	"net/http"
+	"archive/zip"
+	"bytes"
+	"encoding/xml"
+	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
-	"bytes"
-	"strings"
+	"net/http"
 	"strconv"
+	"strings"
 )
 
-func DownloadData(url string) (io.Reader, error) {
+func makeVersionMap(versions []Version) map[string]Version {
+	m := make(map[string]Version)
+	for _, v := range versions {
+		m[v.Version] = v
+	}
+	return m
+}
+
+func downloadData(url string) (io.Reader, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -25,7 +36,7 @@ func DownloadData(url string) (io.Reader, error) {
 	return bytes.NewBuffer(b), nil
 }
 
-func GetHighestVersion(versions []Version) string {
+func getHighestVersion(versions []Version) string {
 	vs := ""
 	high := int64(0)
 	for _, v := range versions {
@@ -54,17 +65,43 @@ func GetHighestVersion(versions []Version) string {
 	return vs
 }
 
-func VersionExists(c Client, id, version string) bool {
-	pkg, err := c.GetPackageData(id)
+func getNuspec(pkgId, version string, r io.Reader) (*Nuspec, error) {
+	nuspec := &Nuspec{}
+
+	b := new(bytes.Buffer)
+	n, err := b.ReadFrom(r)
 	if err != nil {
-		return false
+		return nil, errors.Wrapf(err, "nuspec: reading from download stream %s %s", pkgId, version)
 	}
 
-	for _, v := range pkg.Versions {
-		if v.Version == version {
-			return true
+	br := bytes.NewReader(b.Bytes())
+	zr, err := zip.NewReader(br, n)
+	if err != nil {
+		return nil, errors.Wrapf(err, "nuspec: creating reader for nupkg zip %s %s, file len %d", pkgId, version, n)
+	}
+
+	var nuspecReader io.Reader
+	var ferr error
+	nfilename := pkgId + ".nuspec"
+	for _, f := range zr.File {
+		if f.Name == nfilename {
+			nuspecReader, ferr = f.Open()
+			if ferr != nil {
+				return nil, errors.Wrapf(ferr, "nuspec: opening file inside zip %s", nfilename)
+			}
+			break
 		}
 	}
 
-	return false
+	if nuspecReader == nil {
+		return nil, errors.Errorf("nuspec: no reader, no .nuspec file in package, %s %s", pkgId, version)
+	}
+
+	xr := xml.NewDecoder(nuspecReader)
+	xerr := xr.Decode(nuspec)
+	if xerr != nil {
+		return nil, errors.Wrapf(xerr, "nuspec: decoding xml %s %s", pkgId, version)
+	}
+
+	return nuspec, nil
 }

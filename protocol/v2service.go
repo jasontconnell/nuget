@@ -1,11 +1,11 @@
 package protocol
 
 import (
-	"net/http"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 )
 
@@ -13,8 +13,8 @@ type v2Service struct {
 	resourceUrl string
 }
 
-func NewV2Client(url string) Client {
-	return v2Service{ resourceUrl: url }
+func NewV2Client(url string) v2Service {
+	return v2Service{resourceUrl: url}
 }
 
 func (svc v2Service) IsValid() bool {
@@ -26,33 +26,42 @@ func (svc v2Service) GetServiceVersion() int {
 }
 
 func (svc v2Service) GetPackageData(id string) (Package, error) {
-	var result Package
+	var pkg Package
 	url := fmt.Sprintf(svc.getSearchUrlFormat(), id)
 	var feed v2feed
 
 	err := xmlRequest(url, &feed)
 
 	if err != nil {
-		return result, err
+		return pkg, err
 	}
 
 	for _, entry := range feed.Entries {
-		if result.Id == "" {
-			result.Id = entry.Properties.Id
+		if pkg.Id == "" {
+			pkg.Id = entry.Properties.Id
 		}
-		result.Versions = append(result.Versions, Version { Url: entry.Id, Version: entry.Properties.Version, DownloadUrl: entry.Content.DownloadUrl })
+		pkg.Versions = append(pkg.Versions, Version{Version: entry.Properties.Version, DownloadUrl: entry.Content.DownloadUrl})
 	}
-	return result, nil
-}
+	pkg.VersionMap = makeVersionMap(pkg.Versions)
 
-func (svc v2Service) VersionExists(id, version string) bool {
-	return VersionExists(svc, id, version)
+	return pkg, nil
 }
 
 func (svc v2Service) DownloadPackage(version Version) (io.Reader, error) {
-	
-	return DownloadData(version.DownloadUrl)
-	
+	return downloadData(version.DownloadUrl)
+}
+
+func (svc v2Service) GetVersion(id, version string) (Version, error) {
+	return Version{}, nil
+}
+
+func (svc v2Service) GetNuspec(pkg Package, version Version) (*Nuspec, error) {
+	r, err := svc.DownloadPackage(version)
+	if err != nil {
+		return nil, err
+	}
+
+	return getNuspec(pkg.Id, version.Version, r)
 }
 
 // private helpers
@@ -63,9 +72,6 @@ func (svc v2Service) getSearchUrlFormat() string {
 func (svc v2Service) getDownloadUrl(id, version string) string {
 	return ""
 }
-
-
-
 
 func getResourceUrl(url string) (string, error) {
 	var service v2serviceResponse

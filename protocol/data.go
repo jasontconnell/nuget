@@ -1,25 +1,44 @@
 package protocol
 
 import (
-	"io"
+	"encoding/xml"
 )
 
 type Package struct {
-	Id       string    `json:"id"`
-	Versions []Version `json:"versions"`
+	Id         string
+	Versions   []Version
+	VersionMap map[string]Version
 }
 
 type Version struct {
-	Version     string `json:"version"`
-	Url         string `json:"@id"`
-	DownloadUrl string `json:"downloadUrl"`
+	Version         string
+	DownloadUrl     string
+	RegistrationUrl string
 }
 
-type Client interface {
-	GetServiceVersion() int
-	GetPackageData(id string) (Package, error)
-	VersionExists(id, version string) bool
-	DownloadPackage(version Version) (io.Reader, error)
-	IsValid() bool
+type Nuspec struct {
+	XMLName  xml.Name       `xml:"package"`
+	MetaData NuspecMetadata `xml:"metadata"`
 }
 
+type NuspecMetadata struct {
+	XMLName          xml.Name `xml:"metadata"`
+	MinClientVersion string   `xml:"minClientVersion,attr"`
+
+	PackageId string `xml:"id"`
+
+	Dependencies     []NuspecDependency      `xml:"dependencies>dependency"`
+	DependencyGroups []NuspecDependencyGroup `xml:"dependencies>group"`
+}
+
+type NuspecDependencyGroup struct {
+	XMLName         xml.Name           `xml:"group"`
+	TargetFramework string             `xml:"targetFramework,attr"`
+	Dependencies    []NuspecDependency `xml:"dependency"`
+}
+
+type NuspecDependency struct {
+	XMLName xml.Name `xml:"dependency"`
+	Name    string   `xml:"id,attr"`
+	Version string   `xml:"version,attr"`
+}
