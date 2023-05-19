@@ -1,15 +1,18 @@
 package nuget
 
 import (
-	"github.com/jasontconnell/nuget/protocol"
-	"github.com/pkg/errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
+	"strings"
+
+	"github.com/jasontconnell/nuget/protocol"
 )
 
 type Service struct {
-	client client
+	client
 }
 
 func getClient(url string) client {
@@ -45,6 +48,11 @@ func FindPackage(urls []string, packageId string) (protocol.Package, error) {
 		}
 		break
 	}
+
+	if pkg.Id != packageId {
+		return pkg, fmt.Errorf("find package: couldn't find package in any nuget service, %s  %v", packageId, urls)
+	}
+
 	return pkg, err
 }
 
@@ -52,34 +60,34 @@ func (svc Service) Download(id, version, folder string) (string, error) {
 	v, err := svc.client.GetVersion(id, version)
 
 	if err != nil {
-		return "", errors.Wrapf(err, "getting version %s %s", id, version)
+		return "", fmt.Errorf("getting version %s %s. %w", id, version, err)
 	}
 
 	if v.Version == "" {
-		return "", errors.Wrapf(err, "version not found %s %s", id, version)
+		return "", fmt.Errorf("version not found %s %s", id, version)
 	}
 
 	r, err := svc.client.DownloadPackage(v)
 
 	if err != nil {
-		return "", errors.Wrapf(err, "Error downloading version, %s %s.", id, version)
+		return "", fmt.Errorf("error downloading version, %s %s. %w", id, version, err)
 	}
 
 	fn := path.Join(folder, id+version+".nupkg")
 
 	f, err := os.OpenFile(fn, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return "", errors.Wrapf(err, "opening destination file failed, %s", fn)
+		return "", fmt.Errorf("opening destination file failed, %s. %w", fn, err)
 	}
 
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
-		return "", errors.Wrapf(err, "reading downloaded file failed, %s %s %s", fn, id, version)
+		return "", fmt.Errorf("reading downloaded file failed, %s %s %s. %w", fn, id, version, err)
 	}
 
 	_, err = f.Write(b)
 	if err != nil {
-		return "", errors.Wrapf(err, "writing destination file, %s %s %s", fn, id, version)
+		return "", fmt.Errorf("writing destination file, %s %s %s. %w", fn, id, version, err)
 	}
 
 	return fn, nil
@@ -143,116 +151,41 @@ func (svc Service) Download(id, version, folder string) (string, error) {
 // 	// return dir, nil
 // }
 
-// func GetLatestVersion(svcUrl, id string) (string, error) {
-// 	return "", nil
-// 	// var err error
-// 	// svc := NewService(svcUrl)
-// 	// err = svc.GetResources()
+func GetLatestVersion(urls []string, pkgId string) (string, error) {
+	pkg, err := FindPackage(urls, pkgId)
+	if err != nil {
+		return "", fmt.Errorf("unable to find package %v - %s. %w", urls, pkgId, err)
+	}
 
-// 	// if err != nil {
-// 	// 	return "", fmt.Errorf("Couldn't get resources, %v", err)
-// 	// }
+	hv := getHighestVersion(pkg.Versions)
+	return hv, nil
+}
 
-// 	// pkgdata, err := svc.GetPackageData(id)
-// 	// version := getHighestVersion(pkgdata.Versions)
+func getHighestVersion(versions []protocol.Version) string {
+	vs := ""
+	high := int64(0)
+	for _, v := range versions {
+		pts := strings.Split(v.Version, ".")
+		if len(pts) > 3 {
+			pts = pts[:3]
+		}
+		m := int64(1)
+		cv := int64(0)
+		for i := len(pts) - 1; i >= 0; i-- {
+			pt := pts[i]
+			if len(pt) > 2 {
+				pt = string(pt[:2])
+			}
+			parsed, _ := strconv.ParseInt(pt, 10, 64)
+			cv = cv + (parsed * m)
+			m = m * int64(100)
+		}
 
-// 	// return version, nil
-// }
+		if cv > high {
+			high = cv
+			vs = v.Version
+		}
+	}
 
-// func (svc *NugetService) GetPackageData(id string) (ResultData, error) {
-// 	return ResultData{}, nil
-// 	// pkg := ResultData{}
-
-// 	// q, err := svc.getQueryService()
-
-// 	// if err != nil {
-// 	// 	return pkg, err
-// 	// }
-
-// 	// url := fmt.Sprintf(`%s?q=@Id:"%s"&prerelease=false`, q.Id, id)
-// 	// resp, rerr := http.Get(url)
-// 	// if rerr != nil {
-// 	// 	return pkg, fmt.Errorf("Failed in call to query, %v", rerr)
-// 	// }
-
-// 	// defer resp.Body.Close()
-
-// 	// qr := QueryResult{}
-// 	// decodeJson(resp.Body, &qr)
-
-// 	// if qr.TotalHits == 0 {
-// 	// 	return pkg, fmt.Errorf("No results, %v", url)
-// 	// }
-
-// 	// for _, res := range qr.Data {
-// 	// 	if res.Id == id {
-// 	// 		pkg = res
-// 	// 		break
-// 	// 	}
-// 	// }
-
-// 	// return pkg, nil
-// }
-
-// func (svc *NugetService) GetVersion(res ResultData, version string) Version {
-// 	return Version{}
-// 	// v := Version{}
-// 	// for _, ver := range res.Versions {
-// 	// 	if ver.Version == version {
-// 	// 		v = ver
-// 	// 		break
-// 	// 	}
-// 	// }
-
-// 	// return v
-// }
-
-// func (svc *NugetService) DownloadVersion(version Version, folder string) (string, error) {
-// 	return "", nil
-// 	// if filepath.IsAbs(folder) {
-// 	// 	err := os.MkdirAll(folder, os.ModePerm)
-// 	// 	if err != nil {
-// 	// 		return "", fmt.Errorf("Couldn't create directories, %v - %v.", folder, err)
-// 	// 	}
-// 	// }
-
-// 	// vd, vderr := svc.getVersionData(version)
-// 	// if vderr != nil {
-// 	// 	return "", vderr
-// 	// }
-// 	// _, fn := path.Split(vd.PackageUrl)
-// 	// f, err := os.Create(filepath.Join(folder, fn))
-
-// 	// if err != nil {
-// 	// 	return "", err
-// 	// }
-
-// 	// resp, gerr := http.Get(vd.PackageUrl)
-// 	// if gerr != nil {
-// 	// 	return "", gerr
-// 	// }
-
-// 	// defer resp.Body.Close()
-// 	// defer f.Close()
-
-// 	// _, cerr := io.Copy(f, resp.Body)
-
-// 	// return fn, cerr
-// }
-
-// func (svc *NugetService) getVersionData(version Version) (VersionData, error) {
-
-// 	return VersionData{}, nil
-// 	// vd := VersionData{}
-// 	// resp, err := http.Get(version.Url)
-
-// 	// if err != nil {
-// 	// 	return vd, err
-// 	// }
-
-// 	// defer resp.Body.Close()
-
-// 	// decodeJson(resp.Body, &vd)
-
-// 	// return vd, nil
-// }
+	return vs
+}
